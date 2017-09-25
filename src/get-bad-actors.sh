@@ -7,9 +7,7 @@ DIR_ROOT=$(dirname $DIR_SRC)
 DIR_OUT="$DIR_ROOT/out"
 DIR_TEMP="$DIR_OUT/temp"
 
-mkdir -p $DIR_SRC/known/
-
-sudo rm -rf $DIR_OUT/
+sudo rm -rf $DIR_TEMP/
 mkdir $DIR_OUT/
 mkdir $DIR_TEMP/
 
@@ -25,8 +23,8 @@ sudo chown -R $WHOAMI $DIR_TEMP/logs/
 echo "Unzipping log files..."
 gunzip $DIR_TEMP/logs/*.gz
 
-echo "Listing log files..."
-ls -l $DIR_TEMP/logs/
+NUM_OF_LOGS=$(find $DIR_TEMP/logs/*.log* | wc -l)
+echo "$NUM_OF_LOGS log files found"
 
 echo "Finding all direct IP requests"
 cat $DIR_TEMP/logs/access.log* | awk '($7 ~ /52.91.52.1:80\//)' | awk '{print $7}' | sort | uniq -c | sort -rn > $DIR_TEMP/bad-requests.source.txt
@@ -53,21 +51,21 @@ NEW_BAD_IPS_COUNT="$(wc -l $DIR_TEMP/bad-ips.txt | awk '{print $1}')"
 
 echo "$NEW_BAD_IPS_COUNT bad ips logged"
 
-OLD_BAD_PATHS_COUNT=$(wc -l $DIR_SRC/known/bad-paths.txt | awk '{print $1}')
+OLD_BAD_PATHS_COUNT=$(wc -l $DIR_OUT/bad-paths.txt | awk '{print $1}')
 
-cat $DIR_TEMP/bad-paths.txt $DIR_SRC/known/bad-paths.txt | sort | uniq > $DIR_SRC/known/bad-paths.txt
+cat $DIR_TEMP/bad-paths.txt $DIR_OUT/bad-paths.txt | sort | uniq > $DIR_OUT/bad-paths.txt
 
-BAD_PATHS_COUNT=$(wc -l $DIR_SRC/known/bad-paths.txt | awk '{print $1}')
+BAD_PATHS_COUNT=$(wc -l $DIR_OUT/bad-paths.txt | awk '{print $1}')
 
-echo "$((BAD_PATHS_COUNT - OLD_BAD_PATHS_COUNT)) new unique bad paths have been added to '$DIR_SRC/bad-paths.txt', there are now $BAD_PATHS_COUNT documented bad paths"
+echo -e "$((BAD_PATHS_COUNT - OLD_BAD_PATHS_COUNT)) new unique bad paths have been added to '$DIR_OUT/bad-paths.txt',\n there are now $BAD_PATHS_COUNT documented bad paths"
 
-OLD_BAD_IPS_COUNT=$(wc -l $DIR_SRC/known/bad-ips.txt | awk '{print $1}')
+OLD_BAD_IPS_COUNT=$(wc -l $DIR_OUT/bad-ips.txt | awk '{print $1}')
 
-cat $DIR_TEMP/bad-ips.txt $DIR_SRC/known/bad-ips.txt | sort | uniq > $DIR_SRC/known/bad-ips.txt
+cat $DIR_TEMP/bad-ips.txt $DIR_OUT/bad-ips.txt | sort | uniq > $DIR_OUT/bad-ips.txt
 
-BAD_IPS_COUNT=$(wc -l $DIR_SRC/known/bad-ips.txt | awk '{print $1}')
+BAD_IPS_COUNT=$(wc -l $DIR_OUT/bad-ips.txt | awk '{print $1}')
 
-echo "$((BAD_IPS_COUNT - OLD_BAD_IPS_COUNT)) new unique bad IPs have been added to '$DIR_SRC/known/bad-ips.txt', there are now $BAD_IPS_COUNT documented bad IPs"
+echo -e "$((BAD_IPS_COUNT - OLD_BAD_IPS_COUNT)) new unique bad IPs have been added to '$DIR_OUT/bad-ips.txt',\n there are now $BAD_IPS_COUNT documented bad IPs"
 
 echo "Cleaning up files..."
 
