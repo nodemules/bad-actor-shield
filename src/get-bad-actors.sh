@@ -1,42 +1,76 @@
 #!/bin/bash
+
 echo "Starting get-bad-actors script"
 
-TEMP_DIR="./temp/"
-sudo rm -rf $TEMP_DIR/
-mkdir $TEMP_DIR/
+DIR_SRC=$(dirname $(realpath $0))
+DIR_ROOT=$(dirname $DIR_SRC)
+DIR_OUT="$DIR_ROOT/out"
+DIR_TEMP="$DIR_OUT/temp"
+
+mkdir -p $DIR_SRC/known/
+
+sudo rm -rf $DIR_OUT/
+mkdir $DIR_OUT/
+mkdir $DIR_TEMP/
 
 echo "Copying NGINX logs"
 
-sudo cp -r /var/log/nginx/ $TEMP_DIR/logs/
+sudo cp -r /var/log/nginx/ $DIR_TEMP/logs/
 
 WHOAMI="$(whoami)"
 
 echo "Changing ownership of files from 'root' to '$WHOAMI'"
-sudo chown -R $WHOAMI $TEMP_DIR/logs/
+sudo chown -R $WHOAMI $DIR_TEMP/logs/
 
 echo "Unzipping log files..."
-gunzip $TEMP_DIR/logs/*.gz
+gunzip $DIR_TEMP/logs/*.gz
 
 echo "Listing log files..."
-ls -l $TEMP_DIR/logs/
+ls -l $DIR_TEMP/logs/
 
 echo "Finding all direct IP requests"
-cat $TEMP_DIR/logs/access.log* | awk '($7 ~ /52.91.52.1:80\//)' | awk '{print $7}' | sort | uniq -c | sort -rn > ./temp/bad-requests.source.txt
+cat $DIR_TEMP/logs/access.log* | awk '($7 ~ /52.91.52.1:80\//)' | awk '{print $7}' | sort | uniq -c | sort -rn > $DIR_TEMP/bad-requests.source.txt
 
-BAD_REQUESTS_SOURCE_LINES="$(wc -l $TEMP_DIR/bad-requests.source.txt | awk '{print $1}')"
+BAD_REQUESTS_SOURCE_LINES="$(wc -l $DIR_TEMP/bad-requests.source.txt | awk '{print $1}')"
 
 echo "$BAD_REQUESTS_SOURCE_LINES direct IP requests found"
-cat temp/bad-requests.source.txt | awk '{print $2}' | sed 's|.*://[^/]*/\([^?]*\)|/\1|g' > temp/bad-paths.txt
+cat $DIR_TEMP/bad-requests.source.txt | awk '{print $2}' | sed 's|.*://[^/]*/\([^?]*\)|/\1|g' > $DIR_TEMP/bad-paths.txt
 
-cat $TEMP_DIR/logs/access.log* | grep -f ./temp/bad-paths.txt > ./temp/bad-requests.full.txt 
+NEW_BAD_PATHS_COUNT=$(wc -l $DIR_TEMP/bad-paths.txt | awk '{print $1}')
 
-cat $TEMP_DIR/bad-requests.full.txt | sed -e 's/\([0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\).*$/\1/' -e t -e d | sort | uniq -c > ./temp/bad-requests.txt
+echo "$NEW_BAD_PATHS_COUNT new bad paths found"
 
-BAD_REQUESTS_ACTUAL="$(cat $TEMP_DIR/bad-requests.txt | awk '{ sum += $1 } END { print sum }')"
+cat $DIR_TEMP/logs/access.log* | grep -f $DIR_TEMP/bad-paths.txt > $DIR_TEMP/bad-requests.full.txt 
+
+cat $DIR_TEMP/bad-requests.full.txt | sed -e 's/\([0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\).*$/\1/' -e t -e d | sort | uniq -c > $DIR_TEMP/bad-requests.txt
+
+BAD_REQUESTS_ACTUAL="$(cat $DIR_TEMP/bad-requests.txt | awk '{ sum += $1 } END { print sum }')"
 
 echo "$BAD_REQUESTS_ACTUAL bad requests found in logs"
-cat $TEMP_DIR/bad-requests.txt | awk '{print $2}' > ./temp/bad-ips.txt
+cat $DIR_TEMP/bad-requests.txt | awk '{print $2}' > $DIR_TEMP/bad-ips.txt
 
-BAD_IPS_COUNT="$(wc -l $TEMP_DIR/bad-ips.txt | awk '{print $1}')"
+NEW_BAD_IPS_COUNT="$(wc -l $DIR_TEMP/bad-ips.txt | awk '{print $1}')"
 
-echo "$BAD_IPS_COUNT bad ips logged"
+echo "$NEW_BAD_IPS_COUNT bad ips logged"
+
+OLD_BAD_PATHS_COUNT=$(wc -l $DIR_SRC/known/bad-paths.txt | awk '{print $1}')
+
+cat $DIR_TEMP/bad-paths.txt $DIR_SRC/known/bad-paths.txt | sort | uniq > $DIR_SRC/known/bad-paths.txt
+
+BAD_PATHS_COUNT=$(wc -l $DIR_SRC/known/bad-paths.txt | awk '{print $1}')
+
+echo "$((BAD_PATHS_COUNT - OLD_BAD_PATHS_COUNT)) new unique bad paths have been added to '$DIR_SRC/bad-paths.txt', there are now $BAD_PATHS_COUNT documented bad paths"
+
+OLD_BAD_IPS_COUNT=$(wc -l $DIR_SRC/known/bad-ips.txt | awk '{print $1}')
+
+cat $DIR_TEMP/bad-ips.txt $DIR_SRC/known/bad-ips.txt | sort | uniq > $DIR_SRC/known/bad-ips.txt
+
+BAD_IPS_COUNT=$(wc -l $DIR_SRC/known/bad-ips.txt | awk '{print $1}')
+
+echo "$((BAD_IPS_COUNT - OLD_BAD_IPS_COUNT)) new unique bad IPs have been added to '$DIR_SRC/known/bad-ips.txt', there are now $BAD_IPS_COUNT documented bad IPs"
+
+echo "Cleaning up files..."
+
+rm -rf $DIR_TEMP/
+
+echo "BadActorShield is done!"
